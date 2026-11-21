@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "molecure"
+version = "0.0.1"
+description = "Target-agnostic 3D-QSAR (CoMFA/CoMSIA-style) for structure-based drug discovery"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # NOTE: rdkit is deliberately not listed. It comes from conda-forge
+    # (see environment.yml); listing it can make pip fetch a second copy.
+    "numpy",
+    "scipy",
+    "pandas",
+    "pyarrow",
+    "scikit-learn",
+    "joblib",
+    "matplotlib",
+    "pydantic>=2",
+    "pyyaml",
+    "typer",
+    "platformdirs",
+    "jinja2",
+    "requests",
+    "chembl_webresource_client",
+]
+
+[project.optional-dependencies]
+protonation = ["molscrub"]
+docked = ["meeko", "gemmi"]
+gui = ["PySide6", "vtk", "pyvista", "pyvistaqt"]
+dev = ["pytest", "ruff", "pre-commit"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/molecure"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
