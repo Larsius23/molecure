@@ -1,3 +1,5 @@
+import json
+
 from typer.testing import CliRunner
 
 from molecure import __version__
@@ -54,3 +56,22 @@ def test_validate_without_project_yaml(tmp_path):
     result = runner.invoke(app, ["validate", str(tmp_path)])
     assert result.exit_code == 1
     assert "project.yaml" in result.output
+
+
+def test_run_loads_data_and_records_a_manifest(demo_project):
+    result = runner.invoke(app, ["run", str(demo_project.root)])
+    assert result.exit_code == 0, result.output
+    run_dirs = list((demo_project.root / "runs").iterdir())
+    assert len(run_dirs) == 1
+    manifest = json.loads((run_dirs[0] / "manifest.json").read_text())
+    assert manifest["datasets"]["calibration_set"]["n_compounds"] == 3
+    assert (run_dirs[0] / "config.resolved.yaml").is_file()
+
+
+def test_run_with_bad_data_creates_no_run_folder(demo_project):
+    csv = demo_project.root / "data/curated/calibration.csv"
+    csv.write_text("compound_id,smiles,pIC50\nc1,C(C,5.5\n")
+    result = runner.invoke(app, ["run", str(demo_project.root)])
+    assert result.exit_code == 1
+    assert "SMILES" in result.output
+    assert list((demo_project.root / "runs").iterdir()) == []

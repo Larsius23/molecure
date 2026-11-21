@@ -9,7 +9,9 @@ import yaml
 from pydantic import ValidationError
 
 from molecure import __version__
-from molecure.project import Workspace, WorkspaceError
+from molecure.config import ProjectConfig  # NEW
+from molecure.data import DataError, load_all  # NEW
+from molecure.project import Workspace, WorkspaceError, create_run  # CHANGED
 
 app = typer.Typer(
     help="mole.cure: target-agnostic 3D-QSAR for structure-based drug discovery.",
@@ -51,6 +53,36 @@ def _format_errors(err: ValidationError) -> list[str]:
     return lines
 
 
+def _open_project(project: Path) -> tuple[Workspace, ProjectConfig]:  # NEW
+    """Open a workspace and load its config; print a clear message and exit on any problem."""
+    try:
+        ws = Workspace.open(project)
+        return ws, ws.load()
+    except WorkspaceError as err:
+        _fail(str(err))
+    except yaml.YAMLError as err:
+        _fail(f"project.yaml is not valid YAML:\n{err}")
+    except ValidationError as err:
+        typer.secho("project.yaml has problems:", fg=typer.colors.RED)
+        for line in _format_errors(err):
+            typer.echo(f"  - {line}")
+        raise typer.Exit(1) from None
+
+
+def _require_files(ws: Workspace, cfg: ProjectConfig) -> None:  # NEW
+    """Exit with code 2 if any file the config refers to is missing."""
+    missing = ws.missing_files(cfg)
+    if missing:
+        typer.secho("files: missing", fg=typer.colors.YELLOW)
+        for label, path in missing:
+            typer.echo(f"  - {label}: {path}")
+        raise typer.Exit(2)
+
+
+def _describe(summary: dict) -> str:  # NEW
+    return ", ".join(f"{key}={value}" for key, value in summary.items())
+
+
 @app.command()
 def init(folder: Annotated[Path, typer.Argument(help="Folder to create the project in.")]) -> None:
     """Create a new project workspace with a starter project.yaml."""
@@ -64,25 +96,14 @@ def init(folder: Annotated[Path, typer.Argument(help="Folder to create the proje
 
 
 @app.command()
-def validate(
+def validate(  # CHANGED: uses the two helpers above
     project: Annotated[Path, typer.Argument(help="Project folder (or its project.yaml).")],
 ) -> None:
     """Check project.yaml, and that every file it refers to exists.
 
     Exit codes: 0 = all good, 1 = config or folder problem, 2 = config fine but files missing.
     """
-    try:
-        ws = Workspace.open(project)
-        cfg = ws.load()
-    except WorkspaceError as err:
-        _fail(str(err))
-    except yaml.YAMLError as err:
-        _fail(f"project.yaml is not valid YAML:\n{err}")
-    except ValidationError as err:
-        typer.secho("project.yaml has problems:", fg=typer.colors.RED)
-        for line in _format_errors(err):
-            typer.echo(f"  - {line}")
-        raise typer.Exit(1) from None
+    ws, cfg = _open_project(project)
 
     typer.secho("config: OK", fg=typer.colors.GREEN)
     roles = Counter(d.role for d in cfg.datasets)
@@ -91,10 +112,32 @@ def validate(
     typer.echo(f"  alignment: {cfg.alignment.mode}")
     typer.echo(f"  fields:    {cfg.molecular_fields.method}")
 
-    missing = ws.missing_files(cfg)
-    if missing:
-        typer.secho("files: missing", fg=typer.colors.YELLOW)
-        for label, path in missing:
-            typer.echo(f"  - {label}: {path}")
-        raise typer.Exit(2)
+    _require_files(ws, cfg)
     typer.secho("files: all present", fg=typer.colors.GREEN)
+
+
+@app.command()  # NEW
+def run(
+    project: Annotated[Path, typer.Argument(help="Project folder (or its project.yaml).")],
+) -> None:
+    """Load every dataset, then create a run folder recording exactly what was used.
+
+    Today this is only the first pipeline stage; later stages will be added to it.
+    Exit codes: 0 = ok, 1 = config or data problem, 2 = files missing.
+    """
+    ws, cfg = _open_project(project)
+    _require_files(ws, cfg)
+
+    try:
+        datasets = load_all(cfg, ws.root)
+    except DataError as err:
+        _fail(str(err))  # no run folder is created for bad data
+
+    new_run = create_run(ws, cfg)
+    summaries = {name: ds.summary() for name, ds in datasets.items()}
+    new_run.add_to_manifest("datasets", summaries)
+
+    typer.secho("data: loaded", fg=typer.colors.GREEN)
+    for name, summary in summaries.items():
+        typer.echo(f"  {name}: {_describe(summary)}")
+    typer.echo(f"run folder: {new_run.root}")
