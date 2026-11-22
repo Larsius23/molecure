@@ -1,26 +1,39 @@
-# Published reference values.
-# Cramer, Patterson & Bunce, J. Am. Chem. Soc. 1988, 110, 5959-5967.
-# "Standard" settings in the paper: 2 A lattice, sp3 carbon probe (radius 1.52 A), +1 charge,
-# Gasteiger-Marsili charges, 1/r dielectric, 30 kcal/mol cutoff, no autoscaling,
-# four cross-validation groups, components added while cross-validated r2 increases.
+# Published reference values for Benchmark 0. Activities are log K (= pKd), larger = stronger.
+#
+# coats_1998   Coats, Perspect. Drug Discov. Des. 1998, 12/13/14, 199-213. CoMFA recomputed with
+#              corrected structures, leave-one-out CV (reproducible), "standard CoMFA scaling",
+#              columns with sigma < 2.0 kcal/mol dropped, Gasteiger-Marsili charges, 2 A grid,
+#              30 kcal/mol steric cutoff. THE PRIMARY TARGETS.
+# cramer_1988  Cramer, Patterson & Bunce, J. Am. Chem. Soc. 1988, 110, 5959-5967. Four random CV
+#              groups (not reproducible), no scaling, no column filter, partly wrong structures.
 
-cbg:
-  n_training: 21
-  table_ii: {components: 2, q2: 0.662, press: 0.719, r2: 0.897, s: 0.397}   # p. 5961
-  table_iii_optimum: {components: 4, q2: 0.677}                              # p. 5965
-  external:                                                                  # p. 5963
-    n: 10
-    predictive_r2_all: 0.65
-    predictive_r2_without_compounds_1_9_10: 0.81
-    note: SD is taken about the mean of the 21 training compounds (the Q2F1 definition)
-  q2_range_when_the_paper_changed_settings:     # 2 components
-    probe_radius: [0.649, 0.728]                # Table III
-    lattice_offset_up_to_1_A: [0.559, 0.779]    # Table IV
+coats_1998:
+  cbg:
+    q2_loo_2_components: {q2: 0.708, sdep: 0.668}
+    q2_loo_best: {components: 3, q2: 0.734, sdep: 0.657}
+  tbg:
+    q2_loo_2_components: {q2: 0.601, sdep: 0.805}
+    q2_loo_best: {components: 8, q2: 0.764, sdep: 0.758}
+  cbg_external_prediction:            # Table 2 and Table 3 (corrected structures)
+    observed_vs_predicted_r2: {all_10: 0.13, without_steroid_31: 0.71}
+    predicted_logK: [7.336, 7.335, 6.961, 7.704, 6.838, 6.788, 7.214, 7.269, 7.629, 7.676]  # 22-31
+    note: steroid 31 (9a-fluoro) is the outlier, observed 5.797; the chapter does not define the r2
+  as_distributed_structures:          # Table 3, row 1: includes the wrong androstanediol
+    cbg_q2_loo_2_components: 0.665
+    cbg_observed_vs_predicted_r2: {all_10: 0.05, without_steroid_31: 0.12}
 
-tbg:
-  n_training: 21
-  table_ii: {components: 2, q2: 0.555, press: 0.849, r2: 0.873, s: 0.453}
-  table_iii_optimum: {components: 3, q2: 0.577}
-  q2_range_when_the_paper_changed_settings:
-    probe_radius: [0.520, 0.660]
-    lattice_offset_up_to_1_A: [0.500, 0.707]
+cramer_1988:
+  q2_4_groups_2_components:
+    cbg: {q2: 0.662, press: 0.719}
+    tbg: {q2: 0.555, press: 0.849}
+  conventional_r2:                    # the two papers assign these pairs to opposite targets
+    as_printed_in_cramer_table_ii:
+      cbg: {r2: 0.897, s: 0.397}
+      tbg: {r2: 0.873, s: 0.453}
+    as_quoted_by_coats:
+      cbg: {r2: 0.873, s: 0.453}
+      tbg: {r2: 0.897, s: 0.397}
+    status: unresolved; compute it ourselves in Stage 6b
+  q2_range_when_the_paper_changed_settings:   # 2 components
+    cbg: {probe_radius: [0.649, 0.728], lattice_offset_up_to_1_A: [0.559, 0.779]}
+    tbg: {probe_radius: [0.520, 0.660], lattice_offset_up_to_1_A: [0.500, 0.707]}

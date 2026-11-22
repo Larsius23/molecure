@@ -4,6 +4,7 @@ Runs benchmarks/steroids/prepare.py into a temporary folder, then loads the resu
 with the real config and loaders.
 """
 
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -22,19 +23,21 @@ REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "benchmarks" / "steroids" / "prepare.py"
 SOURCE = REPO / "benchmarks" / "steroids" / "source" / "Coats_CoMFA_steroidsBenchmarkDataset.sdf"
 
-# Cramer et al. 1988, Table I, in the paper's own sign convention: (TeBG, CBG)
-TABLE_I = [
-    (-5.322, -6.279), (-9.114, -5.000), (-9.176, -5.000), (-7.462, -5.763), (-7.146, -5.613),
-    (-6.342, -7.881), (-6.204, -7.881), (-6.431, -6.892), (-7.819, -5.000), (-7.380, -7.653),
-    (-7.204, -7.881), (-9.740, -5.919), (-8.833, -5.000), (-6.633, -5.000), (-8.176, -5.000),
-    (-6.146, -5.255), (-7.146, -5.255), (-6.362, -5.000), (-6.944, -7.380), (-6.996, -7.740),
-    (-9.204, -6.724),
+# Coats 1998, Table 1: measured affinity constants K x 1e6 (M^-1) of the 21 training steroids.
+# None = "< 0.1": no binding could be measured; the dataset lists these as log K = 5.
+CBG_K = [
+    1.9, None, None, 0.58, 0.41, 76, 76, 7.8, None, 45, 76,
+    0.83, None, None, None, 0.18, 0.18, None, 24, 55, 5.3,
 ]  # fmt: skip
-# Tables III-V, row "actual": the ten external CBG values (compounds 1-10 of Figure 3)
-EXTERNAL = [-7.512, -7.553, -6.779, -7.200, -6.144, -6.247, -7.120, -6.817, -7.688, -5.797]
-# Known difference between the source file and Table I (see the README):
-# file says 5.225, paper 5.255
-KNOWN_CBG_DIFFERENCES = {"S16", "S17"}
+TEBG_K = [
+    0.21, 1300, 1500, 29, 14, 2.2, 1.6, 2.7, 66, 24, 16,
+    5500, 680, 4.3, 150, 1.4, 14, 2.3, 8.8, 9.9, 1600,
+]  # fmt: skip
+# The ten external CBG values (log K): Coats Table 2 and Cramer Tables III-V agree.
+EXTERNAL = [7.512, 7.553, 6.779, 7.200, 6.144, 6.247, 7.120, 6.817, 7.688, 5.797]
+
+# Compounds whose stereochemistry is known to be wrong or undefined in the source (see README).
+KNOWN_STEREO_PROBLEMS = {"S02"}
 
 
 @pytest.fixture(scope="module")
@@ -54,25 +57,46 @@ def by_code(dataset) -> dict[str, float]:
     return {c.id.split("_")[0]: c.activity for c in dataset.compounds}
 
 
-def test_cbg_training_values_match_table_i(workspaces):
+def expected_log_k(k):
+    return 5.0 if k is None else math.log10(k * 1e6)
+
+
+def stereo_problems(compound) -> list[str]:
+    """Centres the SMILES tag leaves undefined, or a 3D structure that disagrees with the tag."""
+    problems = []
+    tag = Chem.MolFromSmiles(compound.mol.GetProp("isomericSMILES"))
+    if any(label == "?" for _, label in Chem.FindMolChiralCenters(tag, includeUnassigned=True)):
+        problems.append("undefined stereocentre in the SMILES tag")
+    if Chem.MolToSmiles(Chem.RemoveHs(compound.mol)) != Chem.MolToSmiles(tag):
+        problems.append("3D structure disagrees with the SMILES tag")
+    return problems
+
+
+def test_cbg_training_values_match_the_raw_affinities(workspaces):
     values = by_code(load_set(workspaces, "steroids_cbg"))
-    for n, (_, cbg) in enumerate(TABLE_I, start=1):
-        code = f"S{n:02d}"
-        expected = -cbg - 0.03 if code in KNOWN_CBG_DIFFERENCES else -cbg
-        assert values[code] == pytest.approx(expected, abs=0.0015), code
+    for n, k in enumerate(CBG_K, start=1):
+        assert values[f"S{n:02d}"] == pytest.approx(expected_log_k(k), abs=0.0015), n
 
 
-def test_tbg_training_values_match_table_i(workspaces):
+def test_tbg_training_values_match_the_raw_affinities(workspaces):
     values = by_code(load_set(workspaces, "steroids_tbg"))
     assert len(values) == 21
-    for n, (tebg, _) in enumerate(TABLE_I, start=1):
-        assert values[f"S{n:02d}"] == pytest.approx(-tebg, abs=0.0015), n
+    for n, k in enumerate(TEBG_K, start=1):
+        assert values[f"S{n:02d}"] == pytest.approx(expected_log_k(k), abs=0.0015), n
 
 
-def test_external_values_match_the_paper(workspaces):
+def test_external_values_match_the_papers(workspaces):
     values = by_code(load_set(workspaces, "steroids_cbg"))
     for n, actual in enumerate(EXTERNAL, start=1):
-        assert values[f"T{n:02d}"] == pytest.approx(-actual, abs=0.0015), n
+        assert values[f"T{n:02d}"] == pytest.approx(actual, abs=0.0015), n
+
+
+def test_corrected_values_keep_their_source_value(workspaces):
+    compounds = {c.id.split("_")[0]: c for c in load_set(workspaces, "steroids_cbg").compounds}
+    for code in ("S16", "S17"):
+        assert compounds[code].activity == pytest.approx(5.255, abs=0.0005)
+        source = float(compounds[code].mol.GetProp("source_activity"))
+        assert source == pytest.approx(-5.225, abs=0.001)  # what the source file said
 
 
 def test_split_file_matches_the_paper(workspaces):
@@ -95,21 +119,35 @@ def test_the_bad_source_record_is_gone(workspaces):
     assert rdMolDescriptors.CalcMolFormula(acetate.mol) == "C23H32O6"
 
 
+def test_stereochemistry_problems_are_exactly_the_known_ones(workspaces):
+    dataset = load_set(workspaces, "steroids_cbg")
+    flagged = {c.id.split("_")[0] for c in dataset.compounds if stereo_problems(c)}
+    assert flagged == KNOWN_STEREO_PROBLEMS
+
+
 def test_both_workspaces_validate_with_the_cli(workspaces):
     for name in ("steroids_cbg", "steroids_tbg"):
         result = CliRunner().invoke(app, ["validate", str(workspaces / name)])
         assert result.exit_code == 0, result.output
 
 
+def test_exclude_option_leaves_the_compound_out(tmp_path):
+    subprocess.run([sys.executable, str(SCRIPT), str(tmp_path), "--exclude", "S02"], check=True)
+    cbg = load_set(tmp_path, "steroids_cbg_no_s02")
+    tbg = load_set(tmp_path, "steroids_tbg_no_s02")
+    assert len(cbg.compounds) == 30 and len(tbg.compounds) == 20
+    assert not any(c.id.startswith("S02") for c in cbg.compounds + tbg.compounds)
+
+
 def test_the_raw_file_is_refused_by_the_p_scale_guard():
-    # The source stores negative log-K values. Loaded as-is they must be refused, not silently used.
+    # The source stores negative log(1/K) values. Loaded as-is they must be refused.
     cfg = CalibrationDataset(
         id="raw",
         role="calibration",
         file=str(SOURCE),
         id_col="name",
         activity_col="pKi_CBG",
-        endpoint="pKi",
+        endpoint="pKd",
     )
     with pytest.raises(DataError, match="outside 0.0 to 14.0"):
         load_dataset(cfg, REPO)
