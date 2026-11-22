@@ -105,3 +105,18 @@ def test_yaml_round_trip(tmp_path):
     path = tmp_path / "project.yaml"
     dump_config(cfg, path)
     assert load_config(path) == cfg
+
+
+def test_comfa_defaults_follow_the_standard_settings():
+    cfg = ProjectConfig.model_validate(make_config())
+    fields = cfg.molecular_fields
+    assert fields.probe_charge == 1.0
+    assert fields.energy_cutoff_kcal == 30.0
+    assert fields.dielectric == "distance"
+
+
+def test_comfa_has_no_force_field_option_any_more():
+    raw = make_config()
+    raw["molecular_fields"] = {"method": "comfa", "force_field": "mmff94"}
+    with pytest.raises(ValidationError, match="force_field"):
+        ProjectConfig.model_validate(raw)

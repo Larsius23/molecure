@@ -20,11 +20,12 @@ class GridConfig(StrictModel):
 class ComfaFields(StrictModel):
     method: Literal["comfa"]
     grid: GridConfig = Field(default_factory=GridConfig)
-    # Classic Sybyl-style defaults, from memory. We verify them against the
-    # original paper in Stage 5 before trusting them.
-    probe_charge: float = 1.0  # probe is an sp3 carbon
+    # Standard CoMFA settings as reported in published methods sections:
+    # sp3 carbon probe with +1 charge, 30 kcal/mol truncation, distance-dependent dielectric.
+    # (The probe's Lennard-Jones parameters are UFF carbon; see fields/kernels.py.)
+    probe_charge: float = 1.0
     energy_cutoff_kcal: float = Field(30.0, gt=0.0)
-    force_field: Literal["mmff94", "uff"] = "mmff94"  # source of vdW parameters
+    dielectric: Literal["distance", "constant"] = "distance"
 
 
 def _comsia_grid() -> GridConfig:
