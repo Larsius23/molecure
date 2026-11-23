@@ -26,14 +26,15 @@ cramer_1988:
   q2_4_groups_2_components:
     cbg: {q2: 0.662, press: 0.719}
     tbg: {q2: 0.555, press: 0.849}
-  conventional_r2:                    # the two papers assign these pairs to opposite targets
-    as_printed_in_cramer_table_ii:
-      cbg: {r2: 0.897, s: 0.397}
-      tbg: {r2: 0.873, s: 0.453}
-    as_quoted_by_coats:
-      cbg: {r2: 0.873, s: 0.453}
-      tbg: {r2: 0.897, s: 0.397}
-    status: unresolved; compute it ourselves in Stage 6b
+  conventional_r2:                    # as printed in Cramer's Table II, 2 components
+    cbg: {r2: 0.897, s: 0.397}
+    tbg: {r2: 0.873, s: 0.453}
+    coats_sybyl_refit_no_cv:          # Coats quotes these with the target labels swapped
+      cbg: {r2: 0.895, s: 0.400}      # labels corrected by us
+      tbg: {r2: 0.878, s: 0.445}
+    note: >
+      Checked against the data: s^2 * (n - c - 1) = (1 - r2) * SS_tot holds for (0.897, 0.397)
+      only with CBG's SS_tot (27.54) and for (0.873, 0.453) only with TBG's (29.23).
   q2_range_when_the_paper_changed_settings:   # 2 components
     cbg: {probe_radius: [0.649, 0.728], lattice_offset_up_to_1_A: [0.559, 0.779]}
     tbg: {probe_radius: [0.520, 0.660], lattice_offset_up_to_1_A: [0.500, 0.707]}
