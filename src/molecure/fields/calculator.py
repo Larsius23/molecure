@@ -93,7 +93,8 @@ class FieldCalculator:
     def _blocks_for_chunk(self, r: np.ndarray, atoms: AtomData) -> dict[str, np.ndarray]:
         s = self.settings
         if s.method == "comfa":
-            probe_x, probe_d = UFF_VDW["C"]  # the probe is an sp3 carbon
+            probe_x = 2.0 * s.probe_radius  # the probe's Lennard-Jones distance x = 2 * its radius
+            probe_d = UFF_VDW["C"][1]  # its well depth: that of an sp3 carbon
             return {
                 "steric": steric_lj(
                     r, atoms.vdw_x, atoms.vdw_d, probe_x, probe_d, s.energy_cutoff_kcal

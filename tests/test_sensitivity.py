@@ -114,7 +114,8 @@ def test_setting_variations_depend_on_the_field_method():
     comsia = [v.label for v in setting_variations(make_cfg(method="comsia"))]
     assert "constant dielectric" in comfa and "constant dielectric" not in comsia
     assert "grid spacing 1 A" in comfa and "scaling block, sigma >= 2" in comfa
-    assert len(comfa) == 12 and len(comsia) == 9
+    assert "probe radius 1.52 A" in comfa and "probe radius 1.52 A" not in comsia
+    assert len(comfa) == 20 and len(comsia) == 9
 
 
 def test_summary_and_formatting():

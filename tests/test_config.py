@@ -126,3 +126,12 @@ def test_squared_correlation_is_an_accepted_metric():
     raw = make_config()
     raw["validation"] = {"metrics": ["q2", "r2_corr"]}
     assert ProjectConfig.model_validate(raw).validation.metrics == ("q2", "r2_corr")
+
+
+def test_probe_radius_defaults_to_uff_carbon_and_must_be_positive():
+    raw = make_config()
+    cfg = ProjectConfig.model_validate(raw)
+    assert cfg.molecular_fields.probe_radius * 2 == pytest.approx(3.851)
+    raw["molecular_fields"] = {"method": "comfa", "probe_radius": 0}
+    with pytest.raises(ValidationError):
+        ProjectConfig.model_validate(raw)

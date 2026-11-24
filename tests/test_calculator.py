@@ -136,3 +136,13 @@ def test_matrix_rejects_mismatched_ids():
     calc = FieldCalculator.fit([PAIR], comfa_settings())
     with pytest.raises(FieldError, match="ids"):
         calc.compute_matrix(["only_one"], [PAIR, PAIR])
+
+
+def test_a_larger_probe_has_a_larger_repulsive_region():
+    small = FieldCalculator.fit([PAIR], comfa_settings(probe_radius=1.5))
+    large = FieldCalculator.fit([PAIR], comfa_settings(probe_radius=2.5))
+
+    def capped_points(calc) -> int:
+        return int(np.sum(calc.compute(PAIR)["steric"] >= 30.0))
+
+    assert capped_points(large) > capped_points(small)

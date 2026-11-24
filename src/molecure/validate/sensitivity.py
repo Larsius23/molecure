@@ -21,6 +21,9 @@ from molecure.model.pls import Recipe
 from . import metrics
 from .cv import choose_components, cv_predictions, loo_folds, q2_curve
 
+# The probe radii of Cramer 1988, Table III (H, O, N, C, S, P, I, Ca), in angstrom.
+PROBE_RADII = (1.08, 1.36, 1.45, 1.52, 1.72, 1.75, 2.05, 2.75)
+
 
 @dataclass(frozen=True)
 class Variation:
@@ -110,6 +113,10 @@ def setting_variations(cfg) -> list[Variation]:
         for cutoff in (10.0, 100.0):
             variations.append(
                 Variation(f"cutoff {cutoff:g} kcal/mol", fields={"energy_cutoff_kcal": cutoff})
+            )
+        for radius in PROBE_RADII:
+            variations.append(
+                Variation(f"probe radius {radius:g} A", fields={"probe_radius": radius})
             )
     return variations
 

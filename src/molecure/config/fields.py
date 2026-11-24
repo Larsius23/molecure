@@ -22,8 +22,10 @@ class ComfaFields(StrictModel):
     grid: GridConfig = Field(default_factory=GridConfig)
     # Standard CoMFA settings as reported in published methods sections:
     # sp3 carbon probe with +1 charge, 30 kcal/mol truncation, distance-dependent dielectric.
-    # (The probe's Lennard-Jones parameters are UFF carbon; see fields/kernels.py.)
     probe_charge: float = 1.0
+    # The probe's van der Waals radius in angstrom. The default is UFF sp3 carbon
+    # (x = 3.851 A, radius 1.9255 A); the Tripos probe of the 1988 paper was smaller (1.52 A).
+    probe_radius: float = Field(1.9255, gt=0.0)
     energy_cutoff_kcal: float = Field(30.0, gt=0.0)
     dielectric: Literal["distance", "constant"] = "distance"
 
