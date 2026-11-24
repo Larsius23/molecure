@@ -24,7 +24,7 @@ def plain(p):
 FAST = {"kfold_k": 4, "kfold_repeats": 5, "y_randomization_runs": 10, "max_components": 4}
 
 
-def test_summary_has_every_section_for_a_fixed_number_of_components():
+def test_summary_has_everysection_for_a_fixed_number_of_components():
     Xtr, ytr, Xte, yte = make_split()
     result = evaluate(Xtr, ytr, plain(100), EvalSettings(n_components=2, **FAST), Xte, yte)
     s = result.summary

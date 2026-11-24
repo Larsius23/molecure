@@ -10,7 +10,7 @@ from pydantic import Field, model_validator
 
 from .base import StrictModel
 
-Metric = Literal["q2", "r2", "q2_f1", "q2_f2", "q2_f3", "ccc", "rm2"]
+Metric = Literal["q2", "r2", "q2_f1", "q2_f2", "q2_f3", "ccc", "rm2", "r2_corr"]
 
 
 class PLSConfig(StrictModel):

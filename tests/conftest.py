@@ -1,10 +1,24 @@
 """Shared test helpers (pytest fixtures)."""
 
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
 from molecure.project import Workspace
+
+
+@pytest.fixture(scope="session")
+def steroid_workspaces(tmp_path_factory):
+    """The four steroid benchmark workspaces, built once per test session."""
+    out = tmp_path_factory.mktemp("steroid_workspaces")
+    script = Path(__file__).resolve().parents[1] / "benchmarks" / "steroids" / "prepare.py"
+    subprocess.run([sys.executable, str(script), str(out)], check=True)
+    subprocess.run([sys.executable, str(script), str(out), "--exclude", "S02"], check=True)
+    return out
 
 
 @pytest.fixture

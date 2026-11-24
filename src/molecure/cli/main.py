@@ -11,7 +11,13 @@ from pydantic import ValidationError
 from molecure import __version__
 from molecure.config import ProjectConfig  # NEW
 from molecure.data import DataError, load_all  # NEW
-from molecure.project import Workspace, WorkspaceError, create_run  # CHANGED
+from molecure.data.splits import SplitError
+from molecure.fields.errors import FieldError
+from molecure.model.calibrate import format_summary  # CHANGED
+from molecure.model.pipeline import PipelineError, fit_project, load_calibration_inputs
+from molecure.model.pls import ModelError
+from molecure.project import Workspace, WorkspaceError, create_run
+from molecure.validate.sensitivity import format_sweep, lattice_offsets, setting_variations, sweep
 
 app = typer.Typer(
     help="mole.cure: target-agnostic 3D-QSAR for structure-based drug discovery.",
@@ -141,3 +147,52 @@ def run(
     for name, summary in summaries.items():
         typer.echo(f"  {name}: {_describe(summary)}")
     typer.echo(f"run folder: {new_run.root}")
+
+
+FIT_ERRORS = (DataError, PipelineError, SplitError, FieldError, ModelError, ValueError)
+
+
+@app.command()
+def fit(
+    project: Annotated[Path, typer.Argument(help="Project folder (or its project.yaml).")],
+) -> None:
+    """Run the calibration pipeline: load, poses, split, fields, PLS, validation.
+
+    Writes a run folder with results.json, predictions.csv, split.csv and model.npz.
+    Exit codes: 0 = ok, 1 = config, data or model problem, 2 = files missing.
+    """
+    ws, cfg = _open_project(project)
+    _require_files(ws, cfg)
+    try:
+        fit_result = fit_project(ws, cfg)
+    except FIT_ERRORS as err:
+        _fail(str(err))
+    typer.secho("model: fitted", fg=typer.colors.GREEN)
+    for line in format_summary(fit_result.result.summary):
+        typer.echo(f"  {line}")
+    typer.echo(f"run folder: {fit_result.run.root}")
+
+
+@app.command()
+def sensitivity(
+    project: Annotated[Path, typer.Argument(help="Project folder (or its project.yaml).")],
+) -> None:
+    """How much do the results depend on grid position, spacing, scaling and field settings?
+
+    Re-fits with ONE thing changed at a time and reports the leave-one-out q2 of the training
+    compounds. Nothing is saved. Exit codes: 0 = ok, 1 = problem, 2 = files missing.
+    """
+    ws, cfg = _open_project(project)
+    _require_files(ws, cfg)
+    try:
+        inputs = load_calibration_inputs(ws, cfg)
+        data = (inputs.ids, inputs.activities, inputs.assignment, inputs.atoms)
+        lattice = sweep(cfg, *data, lattice_offsets())
+        settings = sweep(cfg, *data, setting_variations(cfg))
+    except FIT_ERRORS as err:
+        _fail(str(err))
+    title = "Lattice offsets (leave-one-out q2, training compounds only)"
+    for line in format_sweep(title, lattice, with_range=True):
+        typer.echo(line)
+    for line in format_sweep("Settings, one at a time", settings):
+        typer.echo(line)

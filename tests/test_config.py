@@ -120,3 +120,9 @@ def test_comfa_has_no_force_field_option_any_more():
     raw["molecular_fields"] = {"method": "comfa", "force_field": "mmff94"}
     with pytest.raises(ValidationError, match="force_field"):
         ProjectConfig.model_validate(raw)
+
+
+def test_squared_correlation_is_an_accepted_metric():
+    raw = make_config()
+    raw["validation"] = {"metrics": ["q2", "r2_corr"]}
+    assert ProjectConfig.model_validate(raw).validation.metrics == ("q2", "r2_corr")
