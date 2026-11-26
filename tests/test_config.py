@@ -135,3 +135,25 @@ def test_probe_radius_defaults_to_uff_carbon_and_must_be_positive():
     raw["molecular_fields"] = {"method": "comfa", "probe_radius": 0}
     with pytest.raises(ValidationError):
         ProjectConfig.model_validate(raw)
+
+
+def test_qc_defaults_are_strict():
+    qc = ProjectConfig.model_validate(make_config()).qc
+    assert qc.on_invalid == "error" and qc.max_core_rmsd is None
+    assert qc.max_skipped_fraction == 0.1 and qc.min_core_atoms == 8
+
+
+def test_qc_values_are_checked():
+    for bad in ({"on_invalid": "ignore"}, {"max_core_rmsd": 0}, {"max_skipped_fraction": 1.5}):
+        raw = make_config()
+        raw["qc"] = bad
+        with pytest.raises(ValidationError):
+            ProjectConfig.model_validate(raw)
+
+
+def test_prealigned_alignment_can_name_a_reference_compound():
+    raw = make_config()
+    raw["alignment"] = {"mode": "prealigned", "file": "p.sdf", "reference": "S11_11_deoxycortisol"}
+    assert ProjectConfig.model_validate(raw).alignment.reference == "S11_11_deoxycortisol"
+    raw["alignment"] = {"mode": "prealigned", "file": "p.sdf"}
+    assert ProjectConfig.model_validate(raw).alignment.reference is None

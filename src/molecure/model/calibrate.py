@@ -215,8 +215,18 @@ def format_summary(summary: dict) -> list[str]:
             f"external ({e['n']}): Q2F1 {_num(e['q2_f1'])}  Q2F2 {_num(e['q2_f2'])}  "
             f"CCC {_num(e['ccc'])}  r2_corr {_num(e['r2_corr'])}  RMSE {_num(e['rmse'])}"
         )
+        qc = summary.get("alignment_qc")
+    if qc:
+        lines.append(
+            f"alignment QC:  core RMSD to the reference: median {_num(qc['median'], 2)}, "
+            f"max {_num(qc['max'], 2)} A ({qc['worst']})"
+        )
     if summary.get("outside_grid"):
         names = ", ".join(summary["outside_grid"][:5])
         count = len(summary["outside_grid"])
         lines.append(f"WARNING: {count} compound(s) outside the grid: {names}")
+    if summary.get("excluded"):
+        lines.append(f"WARNING: {len(summary['excluded'])} compound(s) excluded (see excluded.csv)")
+    for note in summary.get("warnings", []):
+        lines.append(f"WARNING: {note}")
     return lines

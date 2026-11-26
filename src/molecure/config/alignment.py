@@ -34,6 +34,9 @@ class PrealignedAlignment(StrictModel):
     receptor_file: str | None = None  # for overlaying contours on the pocket later
     # Free-form record of how the poses were made (box, seed, exhaustiveness, ...).
     metadata: dict[str, str | int | float] = Field(default_factory=dict)
+    # Optional alignment check: the id of a compound in the pose file whose pose is the template.
+    # Every pose is compared with it by core RMSD, measured in place (see the qc settings).
+    reference: str | None = None
 
     @model_validator(mode="after")
     def _best_score_needs_a_score(self) -> Self:

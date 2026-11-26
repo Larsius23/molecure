@@ -136,3 +136,91 @@ def test_cli_sensitivity_prints_both_tables(steroid_workspaces, tmp_path):
     assert "Lattice offsets" in result.output and "range" in result.output
     assert "constant dielectric" in result.output and "grid spacing 1 A" in result.output
     assert list((ws.root / "runs").iterdir()) == []  # nothing is saved
+
+
+def restrict_poses(ws, name, drop_last):
+    """Point the pose file at a copy that lacks the last `drop_last` records."""
+    source = (ws.root / f"data/curated/{name}.sdf").read_text()
+    records = [r for r in source.split("$$$$\n") if r.strip()]
+    kept = "$$$$\n".join(records[: len(records) - drop_last]) + "$$$$\n"
+    (ws.root / "data/curated/few.sdf").write_text(kept)
+    edit_yaml(
+        ws,
+        f"  mode: prealigned\n  file: data/curated/{name}.sdf",
+        "  mode: prealigned\n  file: data/curated/few.sdf",
+    )
+
+
+def edit_yaml(ws, old, new):
+    text = (ws.root / "project.yaml").read_text()
+    assert old in text, old
+    (ws.root / "project.yaml").write_text(text.replace(old, new))
+
+
+def append_yaml(ws, block):
+    path = ws.root / "project.yaml"
+    path.write_text(path.read_text() + "\n" + block)
+
+
+def test_skipping_invalid_compounds_records_exactly_what_was_dropped(steroid_workspaces, tmp_path):
+    ws = copy_workspace(steroid_workspaces, "steroids_tbg", tmp_path)
+    restrict_poses(ws, "steroids_tbg", drop_last=2)  # 2 of 21 = 9.5%, under the default 10% cap
+    append_yaml(ws, "qc:\n  on_invalid: skip\n")
+    fit = fit_project(ws, ws.load())
+    summary = json.loads((fit.run.root / "results.json").read_text())
+    assert summary["compounds"] == {"train": 19, "test": 0}
+    assert [e["stage"] for e in summary["excluded"]] == ["pose", "pose"]
+    assert any("skipped" in note for note in summary["warnings"])
+    lines = (fit.run.root / "excluded.csv").read_text().splitlines()
+    assert lines[0] == "compound_id,stage,reason" and len(lines) == 3
+    assert fit.run.read_manifest()["model"]["n_excluded"] == 2
+
+
+def test_skipping_has_a_cap_so_a_bad_file_cannot_shrink_the_data(steroid_workspaces, tmp_path):
+    ws = copy_workspace(steroid_workspaces, "steroids_tbg", tmp_path)
+    restrict_poses(ws, "steroids_tbg", drop_last=5)  # 5 of 21 = 24%
+    append_yaml(ws, "qc:\n  on_invalid: skip\n")
+    with pytest.raises(PipelineError, match="max_skipped_fraction"):
+        fit_project(ws, ws.load())
+    assert list((ws.root / "runs").iterdir()) == []
+
+
+def test_the_alignment_check_reports_the_core_rmsd_of_every_steroid(steroid_workspaces, tmp_path):
+    ws = copy_workspace(steroid_workspaces, "steroids_tbg", tmp_path)
+    edit_yaml(ws, "  mode: prealigned\n", "  mode: prealigned\n  reference: S11_11_deoxycortisol\n")
+    fit = fit_project(ws, ws.load())
+    rows = read_alignment_qc(fit.run.root)
+    assert len(rows) == 21
+    assert float(rows["S11_11_deoxycortisol"]["core_rmsd"]) == pytest.approx(0.0, abs=1e-6)
+    assert all(int(r["core_atoms"]) >= 8 for r in rows.values())
+    assert max(float(r["core_rmsd"]) for r in rows.values()) < 1.5  # Cramer's six-atom fit
+    summary = json.loads((fit.run.root / "results.json").read_text())
+    assert summary["alignment_qc"]["worst"] in rows and summary["excluded"] == []
+
+
+def test_the_alignment_gate_stops_compounds_that_are_too_far_off(steroid_workspaces, tmp_path):
+    ws = copy_workspace(steroid_workspaces, "steroids_tbg", tmp_path)
+    edit_yaml(ws, "  mode: prealigned\n", "  mode: prealigned\n  reference: S11_11_deoxycortisol\n")
+    append_yaml(ws, "qc:\n  max_core_rmsd: 0.05\n")  # tighter than any real alignment
+    with pytest.raises(PipelineError, match="alignment check failed for"):
+        fit_project(ws, ws.load())
+    assert list((ws.root / "runs").iterdir()) == []
+
+
+def test_several_poses_with_the_first_rule_leave_a_note(write_sdf, tmp_path):
+    write_sdf(
+        tmp_path / "poses.sdf",
+        [("CCO", {"cid": "a"}), ("CCO", {"cid": "a"}), ("CCN", {"cid": "b"})],
+    )
+    alignment = SimpleNamespace(
+        file="poses.sdf", id_property="cid", pose_rule="first",
+        score_property=None, score_better="lower",
+    )  # fmt: skip
+    notes: list[str] = []
+    load_poses(alignment, tmp_path, notes=notes)
+    assert len(notes) == 1 and "several poses" in notes[0] and "a" in notes[0]
+
+
+def read_alignment_qc(run_root) -> dict[str, dict]:
+    with open(run_root / "alignment_qc.csv", newline="", encoding="utf-8") as handle:
+        return {row["compound_id"]: row for row in csv.DictReader(handle)}

@@ -164,3 +164,15 @@ def test_format_summary_mentions_the_key_numbers():
     for needle in ("12 training, 4 external", "leave-one-out", "y-randomization", "external (4)"):
         assert needle in text
     assert "WARNING: 1 compound(s) outside the grid: m14" in text
+
+
+def test_format_summary_shows_warnings_exclusions_and_the_alignment_check():
+    ids, y, assignment, atoms = make_dataset()
+    summary = calibrate(make_cfg(), ids, y, assignment, atoms).summary
+    summary["excluded"] = [{"compound_id": "x1", "stage": "pose", "reason": "no pose"}]
+    summary["warnings"] = ["be careful"]
+    summary["alignment_qc"] = {"median": 0.25, "max": 0.9, "worst": "m05"}
+    text = "\n".join(format_summary(summary))
+    assert "WARNING: 1 compound(s) excluded (see excluded.csv)" in text
+    assert "WARNING: be careful" in text
+    assert "median 0.25, max 0.90 A (m05)" in text

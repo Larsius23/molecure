@@ -12,6 +12,7 @@ from .chemistry import ChemistryConfig
 from .datasets import Dataset
 from .fields import MolecularFields
 from .modeling import PLSConfig, ValidationConfig
+from .qc import QCConfig
 
 
 class ProjectMeta(StrictModel):
@@ -33,6 +34,7 @@ class ProjectConfig(StrictModel):
     molecular_fields: MolecularFields
     pls: PLSConfig = Field(default_factory=PLSConfig)
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
+    qc: QCConfig = Field(default_factory=QCConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
 
     @model_validator(mode="after")
